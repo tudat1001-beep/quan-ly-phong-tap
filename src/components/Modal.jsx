@@ -5,20 +5,34 @@ export function Modal({ isOpen, onClose, title, children, footer = null, maxWidt
   const modalRef = useRef(null);
 
   useEffect(() => {
+    if (!isOpen) return;
+    const previousFocus = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    const focusable = () => modalRef.current?.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])') || [];
+    requestAnimationFrame(() => focusable()[0]?.focus());
     function handleKeyDown(e) {
       if (e.key === 'Escape' && isOpen) {
         onClose();
+      } else if (e.key === 'Tab') {
+        const items = focusable();
+        if (!items.length) return;
+        if (e.shiftKey && document.activeElement === items[0]) {
+          e.preventDefault();
+          items[items.length - 1].focus();
+        } else if (!e.shiftKey && document.activeElement === items[items.length - 1]) {
+          e.preventDefault();
+          items[0].focus();
+        }
       }
     }
-    if (isOpen) {
-      window.addEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = 'hidden';
-    }
+    window.addEventListener('keydown', handleKeyDown);
+    document.body.style.overflow = 'hidden';
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = '';
+      document.body.style.overflow = previousOverflow;
+      if (previousFocus instanceof HTMLElement) previousFocus.focus();
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

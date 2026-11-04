@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { api, formatDate, formatDateTime, formatVnd } from '../api.js';
 import { Modal } from '../components/Modal.jsx';
 import { AlertBanner, EmptyState, InlineError, SkeletonRow } from '../components/Feedback.jsx';
@@ -25,6 +25,7 @@ export function PaymentsView({ user, preselectedMembership = null }) {
   });
   const [createLoading, setCreateLoading] = useState(false);
   const [createErrors, setCreateErrors] = useState({});
+  const paymentIntent = useRef({ key: '', requestId: '' });
 
   const fetchPayments = async () => {
     setLoading(true);
@@ -86,7 +87,7 @@ export function PaymentsView({ user, preselectedMembership = null }) {
     const errs = {};
     if (!createForm.membershipId) errs.membershipId = 'Vui lòng chọn thẻ hội viên cần thu';
     const amount = Number(createForm.amountVnd);
-    if (isNaN(amount) || amount <= 0 || amount > 1000000000) {
+    if (!Number.isSafeInteger(amount) || amount <= 0 || amount > 1000000000) {
       errs.amountVnd = 'Số tiền phải là số nguyên dương hợp lệ (tối đa 1 tỷ VND)';
     }
 
@@ -102,15 +103,23 @@ export function PaymentsView({ user, preselectedMembership = null }) {
 
     setCreateLoading(true);
     try {
-      const recorded = await api.payments.create({
+      const payment = {
         membershipId: Number(createForm.membershipId),
         amountVnd: amount,
         method: createForm.method,
-        requestId: crypto.randomUUID(),
-        note: createForm.note.trim() || undefined,
+        note: createForm.note.trim(),
+      };
+      const key = JSON.stringify(payment);
+      if (paymentIntent.current.key !== key) {
+        paymentIntent.current = { key, requestId: crypto.randomUUID() };
+      }
+      const recorded = await api.payments.create({
+        ...payment,
+        requestId: paymentIntent.current.requestId,
       });
 
       setIsCreateOpen(false);
+      paymentIntent.current = { key: '', requestId: '' };
       setToast({
         type: 'success',
         message: `Lập phiếu thu thành công: ${formatVnd(recorded.amountVnd)} từ ${recorded.memberName} (Phiếu #${recorded.id})!`,
